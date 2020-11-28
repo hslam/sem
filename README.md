@@ -78,6 +78,6 @@ This package is licensed under a MIT license (Copyright (c) 2020 Meng Huang)
 
 
 ### Author
-shm was written by Meng Huang.
+sem was written by Meng Huang.
 
 
