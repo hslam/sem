@@ -4,7 +4,7 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/hslam/sem)](https://goreportcard.com/report/github.com/hslam/sem)
 [![LICENSE](https://img.shields.io/github/license/hslam/sem.svg?style=flat-square)](https://github.com/hslam/sem/blob/master/LICENSE)
 
-Package sem provides a way to use System V semaphore.
+Package sem provides a way to use System V semaphores.
 
 ## Get started
 
