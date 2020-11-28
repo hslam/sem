@@ -59,13 +59,15 @@ func main() {
 ```
 
 #### Output
-go run main.go
-```
+
+```sh
+$ go run main.go
 12:35:21 P true
 12:35:31 V true
 ```
-go run main.go
-```
+In another terminal.
+```sh
+$ go run main.go
 12:35:25 wait
 12:35:31 P true
 12:35:41 V true
