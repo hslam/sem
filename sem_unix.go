@@ -12,13 +12,16 @@ import (
 
 const (
 	// IPC_CREAT creates if key is nonexistent
-	IPC_CREAT = 00001000
+	IPC_CREAT = 01000
 
 	// IPC_EXCL fails if key exists.
-	IPC_EXCL = 00002000
+	IPC_EXCL = 02000
 
 	// IPC_NOWAIT returns error no wait.
 	IPC_NOWAIT = 04000
+
+	// IPC_PRIVATE is private key
+	IPC_PRIVATE = 00000
 
 	// SEM_UNDO sets up adjust on exit entry
 	SEM_UNDO = 010000
@@ -31,76 +34,104 @@ const (
 	IPC_STAT = 2
 )
 
-type sembuf struct {
-	num uint16
-	op  int16
-	flg int16
+// Sembuf represents an operation.
+type Sembuf struct {
+	SemNum uint16
+	SemOp  int16
+	SemFlg int16
 }
 
 // Get calls the semget system call.
-func Get(key int) (uintptr, error) {
-	semid, _, _ := syscall.Syscall(syscall.SYS_SEMGET, uintptr(key), 1, 0666)
-	if int(semid) < 0 {
-		semid, _, err := syscall.Syscall(syscall.SYS_SEMGET, uintptr(key), 1, IPC_CREAT|IPC_EXCL|0666)
-		if int(semid) < 0 {
-			return 0, err
-		}
-		var semun int = 1
-		r1, _, err := syscall.Syscall6(syscall.SYS_SEMCTL, semid, 0, SETVAL, uintptr(semun), 0, 0)
-		if int(r1) < 0 {
-			return 0, err
-		}
-		return semid, nil
+//
+// The semget() system call returns the System V semaphore set identifier
+// associated with the argument key.
+//
+// A new set of nsems semaphores is created if key has the value
+// IPC_PRIVATE or if no existing semaphore set is associated with key
+// and IPC_CREAT is specified in semflg.
+//
+// If semflg specifies both IPC_CREAT and IPC_EXCL and a semaphore set
+// already exists for key, then semget() fails with errno set to EEXIST.
+//
+// The argument nsems can be 0 (a don't care) when a semaphore set is
+// not being created.  Otherwise, nsems must be greater than 0 and less
+// than or equal to the maximum number of semaphores per semaphore set.
+//
+// If successful, the return value will be the semaphore set identifier,
+// otherwise, -1 is returned, with errno indicating the error.
+func Get(key int, nsems int, semflg int) (int, error) {
+	r1, _, err := syscall.Syscall(syscall.SYS_SEMGET, uintptr(key), uintptr(nsems), uintptr(semflg))
+	semid := int(r1)
+	if semid < 0 {
+		return semid, err
 	}
 	return semid, nil
 }
 
-// P calls the semop P system call.
-func P(semid uintptr, flg int16) (bool, error) {
-	if flg == 0 {
-		flg = SEM_UNDO
+// SetValue calls the semctl SETVAL system call.
+func SetValue(semid int, semnum int, semun int) (bool, error) {
+	r1, _, err := syscall.Syscall6(syscall.SYS_SEMCTL, uintptr(semid), uintptr(semnum), SETVAL, uintptr(semun), 0, 0)
+	if int(r1) < 0 {
+		return false, err
 	}
-	buf := sembuf{num: 0, op: -1, flg: flg}
-	r1, _, err := syscall.Syscall(syscall.SYS_SEMOP, semid, uintptr(unsafe.Pointer(&buf)), 1)
-	var ok bool
-	if r1 == 0 {
-		ok = true
-	}
-	if err != 0 && err != syscall.EAGAIN {
-		return ok, err
-	}
-	return ok, nil
-}
-
-// V calls the semop V system call.
-func V(semid uintptr, flg int16) (bool, error) {
-	if flg == 0 {
-		flg = SEM_UNDO
-	}
-	buf := sembuf{num: 0, op: +1, flg: flg}
-	r1, _, err := syscall.Syscall(syscall.SYS_SEMOP, semid, uintptr(unsafe.Pointer(&buf)), 1)
-	var ok bool
-	if r1 == 0 {
-		ok = true
-	}
-	if err != 0 && err != syscall.EAGAIN {
-		return ok, err
-	}
-	return ok, nil
+	return true, nil
 }
 
 // GetValue calls the semctl GETVAL system call.
-func GetValue(semid uintptr) (int, error) {
-	r1, _, err := syscall.Syscall(syscall.SYS_SEMCTL, semid, 0, GETVAL)
-	if int(r1) < 0 {
-		return 0, err
+func GetValue(semid int, semnum int) (int, error) {
+	r1, _, err := syscall.Syscall(syscall.SYS_SEMCTL, uintptr(semid), uintptr(semnum), GETVAL)
+	count := int(r1)
+	if count < 0 {
+		return count, err
 	}
-	return int(r1), nil
+	return count, nil
 }
 
-// Remove removes the semaphore with the given id.
-func Remove(semid uintptr) error {
-	r1, _, errno := syscall.Syscall(syscall.SYS_SEMCTL, semid, IPC_RMID, 0)
+// P calls the semop P system call.
+// Flags recognized in semflg are IPC_NOWAIT and SEM_UNDO.
+// If an operation specifies SEM_UNDO, it will be automatically undone when the
+// process terminates.
+func P(semid int, semnum int, semflg int) (bool, error) {
+	return op(semid, uint16(semnum), -1, int16(semflg))
+}
+
+// V calls the semop V system call.
+// Flags recognized in semflg are IPC_NOWAIT and SEM_UNDO.
+// If an operation specifies SEM_UNDO, it will be automatically undone when the
+// process terminates.
+func V(semid int, semnum int, semflg int) (bool, error) {
+	return op(semid, uint16(semnum), 1, int16(semflg))
+}
+
+func op(semid int, semnum uint16, semop, semflg int16) (bool, error) {
+	if semflg == 0 {
+		semflg = SEM_UNDO
+	}
+	var sops [1]Sembuf
+	sops[0] = Sembuf{SemNum: semnum, SemOp: semop, SemFlg: semflg}
+	return Op(semid, sops[:])
+}
+
+// Op calls the semop system call.
+// Flags recognized in SemFlg are IPC_NOWAIT and SEM_UNDO.
+// If an operation specifies SEM_UNDO, it will be automatically undone when the
+// process terminates.
+func Op(semid int, sops []Sembuf) (bool, error) {
+	nsops := len(sops)
+	r1, _, err := syscall.Syscall(syscall.SYS_SEMOP, uintptr(semid), uintptr(unsafe.Pointer(&sops[0])), uintptr(nsops))
+	var ok = true
+	if int(r1) < 0 {
+		ok = false
+	}
+	if err != 0 && err != syscall.EAGAIN {
+		return ok, err
+	}
+	return ok, nil
+}
+
+// Remove removes the semaphore set with the given id.
+func Remove(semid int) error {
+	r1, _, errno := syscall.Syscall(syscall.SYS_SEMCTL, uintptr(semid), IPC_RMID, 0)
 	if int(r1) < 0 {
 		return syscall.Errno(errno)
 	}

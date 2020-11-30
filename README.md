@@ -33,27 +33,38 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	semid, err := sem.Get(key)
+	nsems := 1
+	semid, err := sem.Get(key, nsems, 0666)
+	if err != nil {
+		semid, err = sem.Get(key, nsems, sem.IPC_CREAT|sem.IPC_EXCL|0666)
+		if err != nil {
+			panic(err)
+		}
+		defer sem.Remove(semid)
+		for semnum := 0; semnum < nsems; semnum++ {
+			_, err := sem.SetValue(semid, semnum, 1)
+			if err != nil {
+				panic(err)
+			}
+		}
+	}
+	semnum := 0
+	if count, err := sem.GetValue(semid, semnum); err != nil {
+		panic(err)
+	} else if count == 0 {
+		fmt.Printf("%s semnum %d wait\n", time.Now().Format("15:04:05"), semnum)
+	}
+	ok, err := sem.P(semid, semnum, sem.SEM_UNDO)
 	if err != nil {
 		panic(err)
 	}
-	defer sem.Remove(semid)
-	if r, err := sem.GetValue(semid); err != nil {
-		panic(err)
-	} else if r == 0 {
-		fmt.Printf("%s wait\n", time.Now().Format("15:04:05"))
-	}
-	ok, err := sem.P(semid, sem.SEM_UNDO)
-	if err != nil {
-		panic(err)
-	}
-	fmt.Printf("%s P %t\n", time.Now().Format("15:04:05"), ok)
+	fmt.Printf("%s semnum %d P %t\n", time.Now().Format("15:04:05"), semnum, ok)
 	time.Sleep(time.Second * 10)
-	ok, err = sem.V(semid, sem.SEM_UNDO)
+	ok, err = sem.V(semid, semnum, sem.SEM_UNDO)
 	if err != nil {
 		panic(err)
 	}
-	fmt.Printf("%s V %t\n", time.Now().Format("15:04:05"), ok)
+	fmt.Printf("%s semnum %d V %t\n", time.Now().Format("15:04:05"), semnum, ok)
 	time.Sleep(time.Second * 20)
 }
 ```
@@ -62,15 +73,15 @@ func main() {
 
 ```sh
 $ go run main.go
-12:35:21 P true
-12:35:31 V true
+12:35:21 semnum 0 P true
+12:35:31 semnum 0 V true
 ```
 In another terminal.
 ```sh
 $ go run main.go
-12:35:25 wait
-12:35:31 P true
-12:35:41 V true
+12:35:25 semnum 0 wait
+12:35:31 semnum 0 P true
+12:35:41 semnum 0 V true
 ```
 
 ### License

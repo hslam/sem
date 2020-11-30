@@ -11,22 +11,28 @@ import (
 
 func TestSem(t *testing.T) {
 	done := make(chan struct{})
+	semnum := 0
+	nsems := 1
 	go func() {
 		key, err := ftok.Ftok("/tmp", 0x22)
 		if err != nil {
 			panic(err)
 		}
-		semid, err := Get(key)
+		semid, err := Get(key, nsems, 0666)
 		if err != nil {
-			panic(err)
+			semid, err = Get(key, nsems, IPC_CREAT|IPC_EXCL|0666)
+			if err != nil {
+				panic(err)
+			}
+			defer Remove(semid)
+			for semnum := 0; semnum < nsems; semnum++ {
+				_, err := SetValue(semid, semnum, 1)
+				if err != nil {
+					panic(err)
+				}
+			}
 		}
-		defer Remove(semid)
-		if r, err := GetValue(semid); err != nil {
-			panic(err)
-		} else if r == 0 {
-			t.Error("wait\n")
-		}
-		ok, err := P(semid, IPC_NOWAIT|SEM_UNDO)
+		ok, err := P(semid, semnum, IPC_NOWAIT|SEM_UNDO)
 		if err != nil {
 			t.Error(err)
 		}
@@ -34,7 +40,7 @@ func TestSem(t *testing.T) {
 			t.Error("P failed!\n")
 		}
 		time.Sleep(time.Millisecond * 200)
-		ok, err = V(semid, IPC_NOWAIT|SEM_UNDO)
+		ok, err = V(semid, semnum, IPC_NOWAIT|SEM_UNDO)
 		if err != nil {
 			t.Error(err)
 		}
@@ -49,16 +55,16 @@ func TestSem(t *testing.T) {
 	if err != nil {
 		panic(err)
 	}
-	semid, err := Get(key)
+	semid, err := Get(key, nsems, 0666)
 	if err != nil {
-		panic(err)
+		t.Error()
 	}
-	if r, err := GetValue(semid); err != nil {
+	if r, err := GetValue(semid, semnum); err != nil {
 		panic(err)
 	} else if r > 0 {
 		t.Error()
 	}
-	ok, err := P(semid, IPC_NOWAIT|SEM_UNDO)
+	ok, err := P(semid, semnum, IPC_NOWAIT|SEM_UNDO)
 	if err != nil {
 		t.Error(err)
 	}
