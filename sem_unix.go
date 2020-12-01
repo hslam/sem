@@ -109,16 +109,33 @@ func op(semid int, semnum uint16, semop, semflg int16) (bool, error) {
 	}
 	var sops [1]Sembuf
 	sops[0] = Sembuf{SemNum: semnum, SemOp: semop, SemFlg: semflg}
-	return Op(semid, sops[:])
+	return Operate(semid, sops[:])
 }
 
 // Op calls the semop system call.
-// Flags recognized in SemFlg are IPC_NOWAIT and SEM_UNDO.
+//
+// semop() performs operations on selected semaphores in the set indi‐
+// cated by semid.  Each of the nsops elements in the array pointed to
+// by sops is a structure that specifies an operation to be performed on
+// a single semaphore.  The elements of this structure are of type
+// struct sembuf, containing the following members:
+//
+// unsigned short sem_num;  /* semaphore number */
+// short          sem_op;   /* semaphore operation */
+// short          sem_flg;  /* operation flags */
+//
+// Flags recognized in sem_flg are IPC_NOWAIT and SEM_UNDO.
 // If an operation specifies SEM_UNDO, it will be automatically undone when the
 // process terminates.
-func Op(semid int, sops []Sembuf) (bool, error) {
-	nsops := len(sops)
-	r1, _, err := syscall.Syscall(syscall.SYS_SEMOP, uintptr(semid), uintptr(unsafe.Pointer(&sops[0])), uintptr(nsops))
+//
+// The set of operations contained in sops is performed in array order,
+// and atomically, that is, the operations are performed either as a
+// complete unit, or not at all.  The behavior of the system call if not
+// all operations can be performed immediately depends on the presence
+// of the IPC_NOWAIT flag in the individual sem_flg fields, as noted be‐
+// low.
+func Op(semid int, sops uintptr, nsops int) (bool, error) {
+	r1, _, err := syscall.Syscall(syscall.SYS_SEMOP, uintptr(semid), sops, uintptr(nsops))
 	var ok = true
 	if int(r1) < 0 {
 		ok = false
@@ -127,6 +144,11 @@ func Op(semid int, sops []Sembuf) (bool, error) {
 		return ok, err
 	}
 	return ok, nil
+}
+
+// Operate calls the semop system call.
+func Operate(semid int, sops []Sembuf) (bool, error) {
+	return Op(semid, uintptr(unsafe.Pointer(&sops[0])), len(sops))
 }
 
 // Remove removes the semaphore set with the given id.
