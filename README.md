@@ -1,6 +1,6 @@
 # sem
 [![PkgGoDev](https://pkg.go.dev/badge/github.com/hslam/sem)](https://pkg.go.dev/github.com/hslam/sem)
-[![Build Status](https://travis-ci.org/hslam/sem.svg?branch=master)](https://travis-ci.org/hslam/sem)
+[![Build Status](https://api.travis-ci.com/hslam/sem.svg?branch=master)](https://travis-ci.com/hslam/sem)
 [![Go Report Card](https://goreportcard.com/badge/github.com/hslam/sem)](https://goreportcard.com/report/github.com/hslam/sem)
 [![LICENSE](https://img.shields.io/github/license/hslam/sem.svg?style=flat-square)](https://github.com/hslam/sem/blob/master/LICENSE)
 
